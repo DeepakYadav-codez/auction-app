@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block content %}
+
+<section class="hero">
+  <div class="spot">
+    {% if top %}
+      <p class="kicker">Biggest buy so far</p>
+      <h2 class="spot-name">{{ top.name }}</h2>
+      <div class="spot-price"><span data-count="{{ top.sold_price }}">0</span><em>{{ UNIT }}</em></div>
+      <p class="spot-team">Bought by <b>{{ top.team.name }}</b>{% if top.role %} · {{ top.role }}{% endif %}</p>
+    {% else %}
+      <p class="kicker">Waiting for the first hammer</p>
+      <h2 class="spot-name">No sales yet</h2>
+      <p class="spot-team">Add teams and players, then open the <a href="{{ url_for('auction') }}">live auction</a>.</p>
+    {% endif %}
+  </div>
+  <div class="board">
+    <div class="tile"><span data-count="{{ stats.available }}">0</span><label>Waiting</label></div>
+    <div class="tile gold"><span data-count="{{ stats.sold }}">0</span><label>Sold</label></div>
+    <div class="tile red"><span data-count="{{ stats.unsold }}">0</span><label>Unsold</label></div>
+    <div class="tile wide"><span data-count="{{ total_spent }}">0</span><small>{{ UNIT }}</small><label>Total spent across all teams</label></div>
+  </div>
+</section>
+
+{% if sold %}
+<div class="ticker" aria-label="Sold players">
+  <div class="track">
+    {% for rep in range(2) %}
+      {% for p in sold %}
+      <span class="item"><b>{{ p.name }}</b> to {{ p.team.name }} <em>{{ p.sold_price }}{{ UNIT }}</em></span>
+      {% endfor %}
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+{% if not teams %}<p class="muted">No teams yet. <a href="{{ url_for('teams') }}">Add a team</a> to begin.</p>{% endif %}
+
+<div class="grid teams">
+{% for t in teams %}
+  {% set pct = (t.remaining * 100 / t.budget)|round|int %}
+  <section class="team-card" style="--pct: {{ pct }}%; --i: {{ loop.index0 }}">
+    <div class="glow"></div>
+    <div class="team-head">
+      <h2>{{ t.name }}</h2>
+      <div class="purse"><span data-count="{{ t.remaining }}">0</span><em>{{ UNIT }} left</em></div>
+    </div>
+    <div class="bar" title="{{ t.remaining }}{{ UNIT }} of {{ t.budget }}{{ UNIT }} remaining"><i></i></div>
+    <p class="muted small-row">Spent {{ t.spent }}{{ UNIT }} of {{ t.budget }}{{ UNIT }}</p>
+
+    <div class="slots" title="{{ t.players|length }} of {{ MAX_SQUAD }} squad places filled">
+      {% for n in range(MAX_SQUAD) %}<b class="{{ 'on' if n < t.players|length else '' }}" style="--n: {{ n }}"></b>{% endfor %}
+    </div>
+
+    <ul class="squad">
+      {% for p in t.players %}
+      <li style="--n: {{ loop.index0 }}">
+        <span class="pname">{{ p.name }}<small>{{ p.role }}</small></span>
+        <span class="pprice">{{ p.sold_price }}{{ UNIT }}</span>
+        <form method="post" action="{{ url_for('undo', pid=p.id) }}"><button class="link" title="Undo this sale">undo</button></form>
+      </li>
+      {% else %}<li class="empty">Squad is empty. Next buy goes here.</li>{% endfor %}
+    </ul>
+  </section>
+{% endfor %}
+</div>
+
+<script>
+// count-up numbers
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+document.querySelectorAll('[data-count]').forEach(el => {
+  const end = +el.dataset.count;
+  if (reduce || end === 0) { el.textContent = end; return; }
+  const dur = 1300, t0 = performance.now();
+  (function step(t) {
+    const p = Math.min((t - t0) / dur, 1), e = 1 - Math.pow(1 - p, 4);
+    el.textContent = Math.round(end * e);
+    if (p < 1) requestAnimationFrame(step);
+  })(t0);
+});
+// bars + slots fill after load
+requestAnimationFrame(() => requestAnimationFrame(() => document.body.classList.add('ready')));
+// tilt + spotlight on team cards
+if (!reduce) document.querySelectorAll('.team-card').forEach(card => {
+  card.addEventListener('mousemove', e => {
+    const r = card.getBoundingClientRect(), px = (e.clientX - r.left) / r.width, py = (e.clientY - r.top) / r.height;
+    card.style.setProperty('--rx', ((0.5 - py) * 7).toFixed(2) + 'deg');
+    card.style.setProperty('--ry', ((px - 0.5) * 9).toFixed(2) + 'deg');
+    card.style.setProperty('--mx', (px * 100) + '%'); card.style.setProperty('--my', (py * 100) + '%');
+  });
+  card.addEventListener('mouseleave', () => { card.style.setProperty('--rx', '0deg'); card.style.setProperty('--ry', '0deg'); });
+});
+</script>
+{% endblock %}

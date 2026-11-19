@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="card">
+  <h2>Add team</h2>
+  <form method="post" class="row">
+    <input name="name" placeholder="Team name" required>
+    <input name="budget" type="number" min="1" placeholder="Budget ({{ UNIT }})" required>
+    <button>Add team</button>
+  </form>
+</section>
+<section class="card">
+  <h2>Teams</h2>
+  <table>
+    <tr><th>Name</th><th class="r">Budget</th><th class="r">Remaining</th><th class="r">Players</th><th></th></tr>
+    {% for t in teams %}
+    <tr><td>{{ t.name }}</td><td class="r">{{ t.budget }}{{ UNIT }}</td><td class="r">{{ t.remaining }}{{ UNIT }}</td>
+        <td class="r">{{ t.players|length }}</td>
+        <td class="r"><form method="post" action="{{ url_for('delete_team', tid=t.id) }}" onsubmit="return confirm('Delete this team?')"><button class="link danger">delete</button></form></td></tr>
+    {% else %}<tr><td class="muted" colspan="5">No teams yet</td></tr>{% endfor %}
+  </table>
+</section>
+{% endblock %}

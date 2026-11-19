@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block content %}
+{% if not teams %}
+  <p class="muted">Add at least one <a href="{{ url_for('teams') }}">team</a> first.</p>
+{% elif not player %}
+  <section class="card center">
+    <h2>🎉 Auction round complete</h2>
+    <p class="muted">No more available players.</p>
+    <form method="post" action="{{ url_for('reauction') }}"><button>Re-auction unsold players</button></form>
+  </section>
+{% else %}
+<section class="card center">
+  <p class="muted">{{ left }} player(s) left in this round</p>
+  <h2 class="big">{{ player.name }}</h2>
+  <p class="muted">{{ player.role }} · Base price {{ player.base_price }}{{ UNIT }}</p>
+
+  <div class="bid">
+    <div class="amount"><span id="bid">{{ player.base_price }}</span>{{ UNIT }}</div>
+    <div id="leader" class="muted">No bids yet</div>
+  </div>
+
+  <div class="row center-row">
+    <label>Increment
+      <select id="inc"><option selected>2</option><option>5</option><option>10</option><option>25</option><option>50</option></select>
+    </label>
+  </div>
+
+  <div class="teambtns" id="teambtns"></div>
+
+  <div class="row center-row">
+    <form method="post" action="{{ url_for('sell', pid=player.id) }}" id="sellform">
+      <input type="hidden" name="team_id" id="f_team"><input type="hidden" name="price" id="f_price">
+      <button id="sellbtn" disabled>🔨 SOLD</button>
+    </form>
+    <form method="post" action="{{ url_for('unsold', pid=player.id) }}"><button class="secondary">Unsold</button></form>
+    <button class="secondary" id="resetbid" type="button">Reset bids</button>
+  </div>
+</section>
+
+<script>
+const base = {{ player.base_price }};
+const teams = {{ team_data|tojson }};
+const maxSquad = {{ MAX_SQUAD }};
+let bid = base, leader = null;
+const $ = id => document.getElementById(id);
+
+function render() {
+  $('bid').textContent = bid;
+  $('leader').textContent = leader ? 'Leading: ' + teams.find(t => t.id === leader).name : 'No bids yet';
+  $('f_team').value = leader || ''; $('f_price').value = bid;
+  $('sellbtn').disabled = !leader;
+  const inc = parseInt($('inc').value);
+  $('teambtns').innerHTML = '';
+  teams.forEach(t => {
+    const next = leader === null ? bid : bid + inc;
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'team' + (t.id === leader ? ' lead' : '');
+    b.innerHTML = '<b>' + t.name + '</b><small>Purse ' + t.remaining + '{{ UNIT }} · ' + t.count + '/' + maxSquad + '</small><span>Bid ' + next + '{{ UNIT }}</span>';
+    b.disabled = t.id === leader || next > t.remaining || t.count >= maxSquad;
+    b.onclick = () => { bid = next; leader = t.id; render(); };
+    $('teambtns').appendChild(b);
+  });
+}
+$('inc').onchange = render;
+$('resetbid').onclick = () => { bid = base; leader = null; render(); };
+render();
+</script>
+{% endif %}
+{% endblock %}

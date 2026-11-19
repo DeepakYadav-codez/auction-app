@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="card">
+  <h2>Add player</h2>
+  <form method="post" class="row">
+    <input name="name" placeholder="Player name" required>
+    <select name="role">
+      <option>Batsman</option><option>Bowler</option><option>All-rounder</option><option>Wicketkeeper</option>
+    </select>
+    <input name="base_price" type="number" min="1" placeholder="Base price ({{ UNIT }})" required>
+    <button>Add player</button>
+  </form>
+</section>
+<section class="card">
+  <h2>All players</h2>
+  <table>
+    <tr><th>Name</th><th>Role</th><th class="r">Base</th><th>Status</th><th>Team</th><th class="r">Sold for</th><th></th></tr>
+    {% for p in players %}
+    <tr><td>{{ p.name }}</td><td>{{ p.role }}</td><td class="r">{{ p.base_price }}{{ UNIT }}</td>
+        <td><span class="badge {{ p.status }}">{{ p.status }}</span></td>
+        <td>{{ p.team.name if p.team else '—' }}</td>
+        <td class="r">{{ (p.sold_price ~ UNIT) if p.sold_price else '—' }}</td>
+        <td class="r"><form method="post" action="{{ url_for('delete_player', pid=p.id) }}" onsubmit="return confirm('Delete this player?')"><button class="link danger">delete</button></form></td></tr>
+    {% else %}<tr><td class="muted" colspan="7">No players yet</td></tr>{% endfor %}
+  </table>
+</section>
+{% endblock %}

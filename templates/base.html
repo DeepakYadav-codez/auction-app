@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Player Auction</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;800;900&family=Figtree:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<div class="beams" aria-hidden="true"><i></i><i></i><i></i></div>
+<header>
+  <h1><span class="ball"></span>Player Auction</h1>
+  <nav>
+    <a href="{{ url_for('dashboard') }}">Dashboard</a>
+    <a href="{{ url_for('teams') }}">Teams</a>
+    <a href="{{ url_for('players') }}">Players</a>
+    <a href="{{ url_for('auction') }}" class="live"><span class="dot"></span>Live auction</a>
+  </nav>
+</header>
+<main>
+  {% with msgs = get_flashed_messages(with_categories=true) %}
+    {% for cat, m in msgs %}<div class="flash {{ cat }}" {% if m.startswith('SOLD!') %}data-sold="1"{% endif %}>{{ m }}</div>{% endfor %}
+  {% endwith %}
+  {% block content %}{% endblock %}
+</main>
+<canvas id="confetti" aria-hidden="true"></canvas>
+<script>
+// ---- confetti burst when a player is sold ----
+(function () {
+  if (!document.querySelector('[data-sold]')) return;
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const c = document.getElementById('confetti'), x = c.getContext('2d');
+  c.width = innerWidth; c.height = innerHeight;
+  const colors = ['#f2b632', '#ffd978', '#d6403a', '#eef3ee', '#3ddc97'];
+  const bits = Array.from({length: 160}, () => ({
+    x: c.width / 2, y: c.height * 0.35,
+    vx: (Math.random() - 0.5) * 18, vy: Math.random() * -16 - 4,
+    s: Math.random() * 7 + 4, r: Math.random() * 6, vr: (Math.random() - 0.5) * 0.4,
+    col: colors[Math.floor(Math.random() * colors.length)]
+  }));
+  let t = 0;
+  (function tick() {
+    x.clearRect(0, 0, c.width, c.height);
+    bits.forEach(b => {
+      b.vy += 0.35; b.x += b.vx; b.y += b.vy; b.r += b.vr; b.vx *= 0.99;
+      x.save(); x.translate(b.x, b.y); x.rotate(b.r);
+      x.fillStyle = b.col; x.fillRect(-b.s / 2, -b.s / 4, b.s, b.s / 2); x.restore();
+    });
+    if (++t < 200) requestAnimationFrame(tick); else x.clearRect(0, 0, c.width, c.height);
+  })();
+})();
+</script>
+</body>
+</html>
