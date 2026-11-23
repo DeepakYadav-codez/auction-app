@@ -4,6 +4,8 @@
   <h2 class="mtitle">{{ m.team_a.name }} vs {{ m.team_b.name }}</h2>
   <div class="row">
     {% if m.status == 'live' %}<a class="btn" href="{{ url_for('match_view', mid=m.id) }}">Back to live scoring</a>{% endif %}
+    <a class="btn secondary" href="{{ url_for('match_pdf', mid=m.id) }}">Download PDF</a>
+    <a class="btn secondary" href="{{ url_for('match_excel', mid=m.id) }}">Download Excel</a>
     <a class="btn secondary" href="{{ url_for('matches') }}">All matches</a>
   </div>
 </div>

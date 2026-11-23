@@ -188,3 +188,8 @@ button.danger-btn{background:var(--ball);color:#fff}
 .sub{margin:22px 0 6px;font:800 1.3rem var(--display)}
 .tablewrap{overflow-x:auto} tr.sum td{border-top:2px solid var(--line)}
 @media (max-width:520px){.runs{grid-template-columns:repeat(4,1fr)}}
+
+/* ---------- data page ---------- */
+.card.danger{border-color:rgba(214,64,58,.45)}
+input[type=file]{padding:9px;width:100%}
+input[type=file]::file-selector-button{margin-right:12px;padding:6px 12px;border:0;border-radius:8px;background:var(--gold);color:#241a00;font-weight:700;cursor:pointer}

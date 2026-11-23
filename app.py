@@ -1,13 +1,19 @@
+import io
+import json
 import os
-from flask import Flask, render_template, request, redirect, url_for, flash, abort
+from datetime import date, datetime
+from flask import (Flask, render_template, request, redirect, url_for, flash, abort,
+                   send_file)
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.types import TypeDecorator, Float
 
 import cricket
+import exports
 
 app = Flask(__name__)
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///auction.db"
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "change-this-secret")
+app.config["MAX_CONTENT_LENGTH"] = 5 * 1024 * 1024   # uploads up to 5 MB
 db = SQLAlchemy(app)
 
 MAX_SQUAD = 15      # max players per team
@@ -532,6 +538,234 @@ def match_delete(mid):
     db.session.commit()
     flash("Match deleted.", "ok")
     return redirect(url_for("matches"))
+
+
+
+# ======================= DOWNLOADS / BACKUP / IMPORT =======================
+
+BACKUP_TABLES = [("teams", Team), ("players", Player), ("matches", Match),
+                 ("match_players", MatchPlayer), ("innings", Innings), ("balls", Ball)]
+XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+
+def auction_export():
+    teams = Team.query.order_by(Team.name).all()
+    return dict(
+        teams=[dict(name=t.name, budget=t.budget, spent=t.spent, remaining=t.remaining,
+                    players=[dict(name=p.name, role=p.role or "", base=p.base_price, price=p.sold_price)
+                             for p in sorted(t.players, key=lambda x: -(x.sold_price or 0))])
+               for t in teams],
+        pool=[dict(name=p.name, role=p.role or "", base=p.base_price, status=p.status)
+              for p in Player.query.filter(Player.status != "sold").order_by(Player.id)],
+    )
+
+
+def match_export(m, names):
+    cards, rows = [], []
+    for inn in Innings.query.filter_by(match_id=m.id).order_by(Innings.number):
+        balls = balls_of(m.id, inn.number)
+        s = cricket.summarize(inn, balls, xi_ids(m.id, inn.batting_team_id), names)
+        cards.append(dict(number=inn.number, bat=team_name(inn.batting_team_id),
+                          bowl=team_name(inn.bowling_team_id),
+                          **{k: s[k] for k in ("runs", "wickets", "overs", "run_rate", "batting",
+                                               "bowling", "extras", "did_not_bat", "fow")}))
+        for b in balls:
+            rows.append(dict(
+                innings=inn.number, over=cricket.ball_label(b), bowler=names.get(b.bowler_id, "?"),
+                batter=names.get(b.batter_id, "?"), non_striker=names.get(b.non_striker_id, "?"),
+                runs_bat=b.runs_bat, extra=f"{b.extra_type} {b.extra_runs}" if b.extra_type else "",
+                total=cricket.team_runs(b),
+                wicket=(f"{names.get(b.out_player_id, '?')} {cricket.dismissal(b, names)}" if b.is_wicket else ""),
+                text=cricket.ball_text(b, names)))
+    return dict(id=m.id, title=f"{m.team_a.name} vs {m.team_b.name}", overs=m.overs,
+                status=m.status, result=m.result or "", cards=cards, balls=rows)
+
+
+def leaders_data():
+    names = player_names()
+    team_of = {p.id: (p.team.name if p.team else "") for p in Player.query.all()}
+    bat, bowl = {}, {}
+    for inn in Innings.query.order_by(Innings.match_id, Innings.number):
+        s = cricket.summarize(inn, balls_of(inn.match_id, inn.number),
+                              xi_ids(inn.match_id, inn.batting_team_id), names)
+        for r in s["batting"]:
+            if r["balls"] == 0 and not r["is_out"]:
+                continue
+            d = bat.setdefault(r["id"], dict(name=r["name"], team=team_of.get(r["id"], ""), inns=0, runs=0,
+                                             balls=0, fours=0, sixes=0, hs=0, outs=0))
+            d["inns"] += 1
+            d["runs"] += r["runs"]
+            d["balls"] += r["balls"]
+            d["fours"] += r["fours"]
+            d["sixes"] += r["sixes"]
+            d["hs"] = max(d["hs"], r["runs"])
+            d["outs"] += 1 if r["is_out"] else 0
+        for r in s["bowling"]:
+            d = bowl.setdefault(r["id"], dict(name=r["name"], team=team_of.get(r["id"], ""), balls=0,
+                                              runs=0, wkts=0, maidens=0))
+            d["balls"] += r["balls"]
+            d["runs"] += r["runs"]
+            d["wkts"] += r["wkts"]
+            d["maidens"] += r["maidens"]
+    batting = sorted(bat.values(), key=lambda d: (-d["runs"], d["balls"]))
+    for d in batting:
+        d["sr"] = f"{d['runs'] * 100 / d['balls']:.1f}" if d["balls"] else "-"
+        d["avg"] = f"{d['runs'] / d['outs']:.1f}" if d["outs"] else "-"
+    bowling = sorted(bowl.values(), key=lambda d: (-d["wkts"], d["runs"] / d["balls"] if d["balls"] else 999))
+    for d in bowling:
+        d["overs"] = cricket.overs_str(d["balls"])
+        d["econ"] = f"{d['runs'] * 6 / d['balls']:.2f}" if d["balls"] else "-"
+    return batting, bowling
+
+
+def send_bytes(data, name, mimetype):
+    return send_file(io.BytesIO(data), as_attachment=True, download_name=name, mimetype=mimetype)
+
+
+@app.route("/data")
+def data_hub():
+    return render_template("data.html")
+
+
+@app.route("/leaders")
+def leaders():
+    batting, bowling = leaders_data()
+    buys = Player.query.filter_by(status="sold").order_by(Player.sold_price.desc()).limit(5).all()
+    return render_template("leaders.html", batting=batting[:10], bowling=bowling[:10], buys=buys)
+
+
+@app.route("/export/excel")
+def export_excel():
+    names = player_names()
+    matches_ = [match_export(m, names) for m in Match.query.filter(Match.status != "setup").order_by(Match.id)]
+    batting, bowling = leaders_data()
+    data = exports.build_workbook(auction_export(), matches_, batting, bowling, UNIT)
+    return send_bytes(data, f"auction-{date.today().isoformat()}.xlsx", XLSX)
+
+
+@app.route("/export/auction.pdf")
+def export_auction_pdf():
+    return send_bytes(exports.auction_pdf(auction_export(), UNIT),
+                      f"auction-result-{date.today().isoformat()}.pdf", "application/pdf")
+
+
+@app.route("/matches/<int:mid>/pdf")
+def match_pdf(mid):
+    m = get_or_404(Match, mid)
+    if m.status == "setup":
+        return redirect(url_for("match_squads", mid=mid))
+    return send_bytes(exports.scorecard_pdf(match_export(m, player_names())),
+                      f"scorecard-match-{m.id}.pdf", "application/pdf")
+
+
+@app.route("/matches/<int:mid>/excel")
+def match_excel(mid):
+    m = get_or_404(Match, mid)
+    if m.status == "setup":
+        return redirect(url_for("match_squads", mid=mid))
+    data = exports.build_workbook(None, [match_export(m, player_names())], unit=UNIT)
+    return send_bytes(data, f"scorecard-match-{m.id}.xlsx", XLSX)
+
+
+@app.route("/backup/download")
+def backup_download():
+    payload = {"app": "player-auction", "version": 1, "exported": datetime.now().isoformat(timespec="seconds")}
+    for key, model in BACKUP_TABLES:
+        payload[key] = [{c.name: getattr(o, c.name) for c in model.__table__.columns} for o in model.query.all()]
+    return send_bytes(json.dumps(payload, indent=1).encode("utf-8"),
+                      f"auction-backup-{date.today().isoformat()}.json", "application/json")
+
+
+@app.post("/backup/restore")
+def backup_restore():
+    f = request.files.get("file")
+    if not f or not f.filename:
+        flash("Choose a backup (.json) file first.", "error")
+        return redirect(url_for("data_hub"))
+    if request.form.get("confirm") != "yes":
+        flash("Tick the box to confirm that this replaces all current data.", "error")
+        return redirect(url_for("data_hub"))
+    try:
+        data = json.loads(f.read().decode("utf-8-sig"))
+        if data.get("app") != "player-auction" or not all(isinstance(data.get(k), list) for k, _ in BACKUP_TABLES):
+            raise ValueError("not an auction backup")
+        db.session.expunge_all()
+        for _, model in reversed(BACKUP_TABLES):
+            model.query.delete()
+        for key, model in BACKUP_TABLES:
+            cols = {c.name for c in model.__table__.columns}
+            for row in data[key]:
+                db.session.add(model(**{k: v for k, v in row.items() if k in cols}))
+        db.session.commit()
+        flash(f"Backup restored: {len(data['teams'])} teams, {len(data['players'])} players, "
+              f"{len(data['matches'])} matches.", "ok")
+    except Exception:
+        db.session.rollback()
+        flash("That file couldn't be restored. Use a backup downloaded from this app. Nothing was changed.", "error")
+    return redirect(url_for("data_hub"))
+
+
+@app.route("/players/template.csv")
+def players_template():
+    sample = "name,role,base_price\nRohit Sharma,Batsman,2\nJasprit Bumrah,Bowler,1.5\nHardik Pandya,All-rounder,2\n"
+    return send_bytes(sample.encode("utf-8"), "players-template.csv", "text/csv")
+
+
+@app.post("/players/import")
+def players_import():
+    f = request.files.get("file")
+    if not f or not f.filename:
+        flash("Choose a .csv or .xlsx file first.", "error")
+        return redirect(url_for("data_hub"))
+    try:
+        rows = exports.parse_player_file(f.filename, f.read())
+    except ValueError as e:
+        flash(str(e), "error")
+        return redirect(url_for("data_hub"))
+    except Exception:
+        flash("Couldn't read that file. Use .csv or .xlsx with the columns name, role, base_price.", "error")
+        return redirect(url_for("data_hub"))
+    existing = {p.name.strip().lower() for p in Player.query.all()}
+    added = skipped = dupes = 0
+    for r in rows[:500]:
+        base = num(r["base"])
+        if not r["name"] or base <= 0:
+            skipped += 1
+        elif r["name"].lower() in existing:
+            dupes += 1
+        else:
+            db.session.add(Player(name=r["name"][:80], role=r["role"][:40], base_price=base))
+            existing.add(r["name"].lower())
+            added += 1
+    db.session.commit()
+    msg = f"Imported {added} player{'s' if added != 1 else ''}."
+    if dupes:
+        msg += f" {dupes} already existed."
+    if skipped:
+        msg += f" {skipped} row(s) skipped (missing name or base price)."
+    flash(msg, "ok" if added else "error")
+    return redirect(url_for("players" if added else "data_hub"))
+
+
+@app.post("/season/new")
+def season_new():
+    if request.form.get("confirm", "").strip().upper() != "NEW SEASON":
+        flash("Type NEW SEASON in the box to confirm.", "error")
+        return redirect(url_for("data_hub"))
+    for model in (Ball, Innings, MatchPlayer, Match):
+        model.query.delete()
+    if request.form.get("mode") == "wipe":
+        Player.query.delete()
+        Team.query.delete()
+        flash("Everything was cleared. You can start from scratch.", "ok")
+    else:
+        for p in Player.query.all():
+            p.status, p.sold_price, p.team_id = "available", None, None
+        for t in Team.query.all():
+            t.remaining = t.budget
+        flash("New season started: teams kept, players back in the pool, matches cleared.", "ok")
+    db.session.commit()
+    return redirect(url_for("data_hub"))
 
 
 if __name__ == "__main__":

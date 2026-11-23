@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block content %}
+<h2 class="mtitle" style="margin-bottom:16px">Data</h2>
+
+<div class="grid two">
+  <section class="card">
+    <h2>Download</h2>
+    <p class="muted">Everything from the auction and every match, ready to share or keep.</p>
+    <div class="row">
+      <a class="btn" href="{{ url_for('export_excel') }}">Excel (all data)</a>
+      <a class="btn secondary" href="{{ url_for('export_auction_pdf') }}">Auction result PDF</a>
+    </div>
+    <p class="muted small">The Excel file has teams, squads, unsold players, every match scorecard, top batters and bowlers, and the ball-by-ball log. Each match also has its own PDF and Excel buttons on its scorecard page.</p>
+  </section>
+
+  <section class="card">
+    <h2>Import players</h2>
+    <p class="muted">Add many players at once from a .csv or .xlsx file with the columns <b>name, role, base_price</b>.</p>
+    <form method="post" action="{{ url_for('players_import') }}" enctype="multipart/form-data" class="stack">
+      <input type="file" name="file" accept=".csv,.xlsx" required>
+      <div class="row"><button>Import</button><a class="btn secondary" href="{{ url_for('players_template') }}">Download template</a></div>
+    </form>
+  </section>
+
+  <section class="card">
+    <h2>Backup and restore</h2>
+    <p class="muted">Download a backup before you redeploy, restart the server, or start a new season. Restoring it later brings everything back.</p>
+    <a class="btn" href="{{ url_for('backup_download') }}">Download backup</a>
+    <form method="post" action="{{ url_for('backup_restore') }}" enctype="multipart/form-data" class="stack" style="margin-top:18px">
+      <input type="file" name="file" accept=".json" required>
+      <label class="check" style="border:0"><input type="checkbox" name="confirm" value="yes"><span>I understand this replaces all current data</span></label>
+      <div><button class="secondary">Restore from backup</button></div>
+    </form>
+  </section>
+
+  <section class="card danger">
+    <h2>New season</h2>
+    <p class="muted">Clears the matches and starts fresh. <a href="{{ url_for('backup_download') }}">Download a backup first.</a></p>
+    <form method="post" action="{{ url_for('season_new') }}" class="stack" onsubmit="return confirm('Start a new season? This cannot be undone.')">
+      <label class="check" style="border:0"><input type="radio" name="mode" value="keep" checked><span>Keep teams and players, reset sales and budgets</span></label>
+      <label class="check" style="border:0"><input type="radio" name="mode" value="wipe"><span>Delete everything (teams, players, matches)</span></label>
+      <input name="confirm" placeholder="Type NEW SEASON" autocomplete="off">
+      <div><button class="danger-btn">Start new season</button></div>
+    </form>
+  </section>
+</div>
+{% endblock %}
