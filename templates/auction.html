@@ -52,7 +52,7 @@ function render() {
   const inc = parseFloat($('inc').value);
   $('teambtns').innerHTML = '';
   teams.forEach(t => {
-   const next = leader === null ? bid : Math.round((bid + inc) * 100) / 100;
+    const next = leader === null ? bid : Math.round((bid + inc) * 100) / 100;
     const b = document.createElement('button');
     b.type = 'button';
     b.className = 'team' + (t.id === leader ? ' lead' : '');

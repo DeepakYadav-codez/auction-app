@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="row between" style="margin-bottom:14px">
+  <h2 class="mtitle">{{ m.team_a.name }} vs {{ m.team_b.name }}</h2>
+  <div class="row">
+    {% if m.status == 'live' %}<a class="btn" href="{{ url_for('match_view', mid=m.id) }}">Back to live scoring</a>{% endif %}
+    <a class="btn secondary" href="{{ url_for('matches') }}">All matches</a>
+  </div>
+</div>
+{% if m.result %}<div class="resultbanner">🏆 {{ m.result }}</div>{% endif %}
+
+{% for c in cards %}
+<section class="card">
+  <div class="row between">
+    <h2>{{ c.bat }} — innings {{ c.inn.number }}</h2>
+    <div class="bigscore small">{{ c.s.runs }}<span>/{{ c.s.wickets }}</span> <small>({{ c.s.overs }} ov · RR {{ c.s.run_rate }})</small></div>
+  </div>
+
+  <div class="tablewrap"><table>
+    <tr><th>Batter</th><th>How out</th><th class="r">R</th><th class="r">B</th><th class="r">4s</th><th class="r">6s</th><th class="r">SR</th></tr>
+    {% for r in c.s.batting %}
+    <tr><td>{{ r.name }}{% if r.on_strike and m.status == 'live' %} *{% endif %}</td>
+        <td class="muted">{{ r.out }}</td>
+        <td class="r"><b>{{ r.runs }}</b></td><td class="r">{{ r.balls }}</td><td class="r">{{ r.fours }}</td><td class="r">{{ r.sixes }}</td><td class="r">{{ r.sr }}</td></tr>
+    {% else %}<tr><td class="muted" colspan="7">Yet to start</td></tr>{% endfor %}
+    <tr class="sum"><td>Extras</td><td class="muted" colspan="5">wd {{ c.s.extras.wd }}, nb {{ c.s.extras.nb }}, b {{ c.s.extras.b }}, lb {{ c.s.extras.lb }}</td><td class="r"><b>{{ c.s.extras.total }}</b></td></tr>
+    <tr class="sum"><td>Total</td><td class="muted" colspan="5">{{ c.s.wickets }} wicket{{ '' if c.s.wickets == 1 else 's' }}, {{ c.s.overs }} overs</td><td class="r"><b>{{ c.s.runs }}</b></td></tr>
+  </table></div>
+  {% if c.s.did_not_bat %}<p class="muted small"><b>Did not bat:</b> {{ c.s.did_not_bat|join(', ') }}</p>{% endif %}
+  {% if c.s.fow %}<p class="muted small"><b>Fall of wickets:</b> {{ c.s.fow|join(' · ') }}</p>{% endif %}
+
+  <h3 class="sub">{{ c.bowl }} bowling</h3>
+  <div class="tablewrap"><table>
+    <tr><th>Bowler</th><th class="r">O</th><th class="r">M</th><th class="r">R</th><th class="r">W</th><th class="r">Econ</th></tr>
+    {% for r in c.s.bowling %}
+    <tr><td>{{ r.name }}</td><td class="r">{{ r.overs }}</td><td class="r">{{ r.maidens }}</td><td class="r">{{ r.runs }}</td><td class="r"><b>{{ r.wkts }}</b></td><td class="r">{{ r.econ }}</td></tr>
+    {% else %}<tr><td class="muted" colspan="6">No balls bowled</td></tr>{% endfor %}
+  </table></div>
+</section>
+{% endfor %}
+{% endblock %}

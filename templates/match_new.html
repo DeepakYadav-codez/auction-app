@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="card">
+  <h2>New match</h2>
+  {% if teams|length < 2 %}
+    <p class="muted">You need at least two teams with players bought in the auction.</p>
+  {% else %}
+  <form method="post" class="stack">
+    <div class="row">
+      <label class="field">Team A
+        <select name="team_a" required>{% for t in teams %}<option value="{{ t.id }}">{{ t.name }}</option>{% endfor %}</select>
+      </label>
+      <label class="field">Team B
+        <select name="team_b" required>{% for t in teams %}<option value="{{ t.id }}" {{ 'selected' if loop.index == 2 }}>{{ t.name }}</option>{% endfor %}</select>
+      </label>
+      <label class="field">Overs per innings
+        <input name="overs" type="number" min="1" max="50" value="5" required>
+      </label>
+    </div>
+    <div class="row">
+      <label class="field">Toss won by
+        <select name="toss"><option value="a">Team A</option><option value="b">Team B</option></select>
+      </label>
+      <label class="field">Chose to
+        <select name="choice"><option value="bat">Bat first</option><option value="bowl">Bowl first</option></select>
+      </label>
+    </div>
+    <div><button>Next: choose playing XI</button></div>
+  </form>
+  {% endif %}
+</section>
+{% endblock %}

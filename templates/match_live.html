@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="row between" style="margin-bottom:14px">
+  <h2 class="mtitle">{{ m.team_a.name }} vs {{ m.team_b.name }}</h2>
+  <div class="row">
+    <a class="btn secondary" href="{{ url_for('match_scorecard', mid=m.id) }}">Full scorecard</a>
+    <a class="btn secondary" href="{{ url_for('matches') }}">All matches</a>
+  </div>
+</div>
+
+<section class="scorebig">
+  <p class="kicker">{{ bat_team }} batting · innings {{ inn.number }} of 2 · {{ m.overs }} overs a side</p>
+  <div class="bigscore">{{ s.runs }}<span>/{{ s.wickets }}</span> <small>({{ s.overs }} ov)</small></div>
+  <p class="muted">Run rate {{ s.run_rate }}
+    {% if first %} · {{ first.team }} scored {{ first.runs }}/{{ first.wickets }} ({{ first.overs }} ov){% endif %}
+  </p>
+  {% if chase %}<p class="chase">Target {{ chase.target }} · needs <b>{{ chase.need }}</b> from <b>{{ chase.balls_left }}</b> ball{{ '' if chase.balls_left == 1 else 's' }}</p>{% endif %}
+  {% if m.status == 'finished' %}<div class="resultbanner">🏆 {{ m.result }}</div>{% endif %}
+</section>
+
+{% if live %}
+<div class="grid two">
+  <section class="card">
+    <h2>Batting</h2>
+    <table>
+      <tr><th>Batter</th><th class="r">R</th><th class="r">B</th><th class="r">4s</th><th class="r">6s</th></tr>
+      {% for r in s.batting if r.at_crease %}
+      <tr><td>{{ r.name }}{% if r.on_strike %} <span class="star">*</span>{% endif %}</td>
+          <td class="r"><b>{{ r.runs }}</b></td><td class="r">{{ r.balls }}</td><td class="r">{{ r.fours }}</td><td class="r">{{ r.sixes }}</td></tr>
+      {% endfor %}
+    </table>
+  </section>
+  <section class="card">
+    <h2>Bowling</h2>
+    {% if bowler_name %}
+    <table>
+      <tr><th>Bowler</th><th class="r">O</th><th class="r">R</th><th class="r">W</th></tr>
+      <tr><td>{{ bowler_name }}</td>
+        <td class="r">{{ cur_bowler.overs if cur_bowler else '0.0' }}</td>
+        <td class="r">{{ cur_bowler.runs if cur_bowler else 0 }}</td>
+        <td class="r">{{ cur_bowler.wkts if cur_bowler else 0 }}</td></tr>
+    </table>
+    {% else %}<p class="muted">Choose the next bowler.</p>{% endif %}
+    <p class="muted" style="margin:12px 0 6px">This over</p>
+    <div class="chips">{% for c in s.chips %}<span class="chip {{ c.cls }}">{{ c.text }}</span>{% else %}<span class="muted">No balls yet</span>{% endfor %}</div>
+  </section>
+</div>
+
+{% if need_striker or need_non_striker or need_bowler %}
+<section class="card">
+  <h2>{% if need_striker and need_non_striker %}Start of innings{% elif need_bowler and not (need_striker or need_non_striker) %}New over{% else %}Next up{% endif %}</h2>
+  <form method="post" action="{{ url_for('match_select', mid=m.id) }}" class="row">
+    {% if need_striker %}
+    <label class="field">{{ 'Opener on strike' if need_non_striker else 'New batter in' }}
+      <select name="striker" required>{% for pid, n in avail_bat %}<option value="{{ pid }}">{{ n }}</option>{% endfor %}</select></label>
+    {% endif %}
+    {% if need_non_striker %}
+    <label class="field">{{ 'Opener at non-striker end' if need_striker else 'New batter in' }}
+      <select name="non_striker" required>{% for pid, n in avail_bat %}<option value="{{ pid }}" {{ 'selected' if need_striker and loop.index == 2 }}>{{ n }}</option>{% endfor %}</select></label>
+    {% endif %}
+    {% if need_bowler %}
+    <label class="field">Bowler ({{ bowl_team }})
+      <select name="bowler" required>{% for pid, n in avail_bowl %}<option value="{{ pid }}">{{ n }}</option>{% endfor %}</select></label>
+    {% endif %}
+    <button>Confirm</button>
+  </form>
+</section>
+{% else %}
+<section class="card">
+  <h2>Score this ball</h2>
+  <form method="post" action="{{ url_for('match_ball', mid=m.id) }}">
+    <div class="xtras">
+      {% for k, l in [('normal','Normal'),('wd','Wide'),('nb','No-ball'),('b','Bye'),('lb','Leg-bye')] %}
+      <label><input type="radio" name="kind" value="{{ k }}" {{ 'checked' if loop.first }}><span>{{ l }}</span></label>
+      {% endfor %}
+    </div>
+    <div class="runs">
+      {% for r in range(7) %}<button name="runs" value="{{ r }}" class="runbtn r{{ r }}">{{ r }}</button>{% endfor %}
+    </div>
+    <p class="muted small">Pick the ball type, then tap the runs. For a wide, the number is the extra runs run on top of the wide.</p>
+  </form>
+
+  <details class="wk">
+    <summary>Wicket</summary>
+    <form method="post" action="{{ url_for('match_ball', mid=m.id) }}" class="row">
+      <label class="field">How out
+        <select name="wicket">{% for w in wicket_types %}<option value="{{ w }}">{{ w }}</option>{% endfor %}</select></label>
+      <label class="field">Who is out (run out)
+        <select name="out_who"><option value="striker">{{ striker_name }} (on strike)</option><option value="non_striker">{{ non_striker_name }} (non-striker)</option></select></label>
+      <label class="field">Ball type
+        <select name="kind"><option value="normal">Normal</option><option value="wd">Wide</option><option value="nb">No-ball</option></select></label>
+      <label class="field">Runs completed
+        <input name="runs" type="number" min="0" max="3" value="0"></label>
+      <label class="field">Fielder (optional)
+        <input name="fielder" maxlength="40" placeholder="Caught / run out by"></label>
+      <button class="danger-btn">Out!</button>
+    </form>
+  </details>
+</section>
+{% endif %}
+{% endif %}
+
+<div class="row" style="margin:6px 0 18px">
+  <form method="post" action="{{ url_for('match_undo', mid=m.id) }}" onsubmit="return confirm('Remove the last ball?')"><button class="secondary">↩ Undo last ball</button></form>
+</div>
+
+<section class="card">
+  <h2>Ball by ball</h2>
+  <ul class="comm">
+    {% for c in s.commentary %}
+    <li class="{{ 'wk' if c.wicket else 'big' if c.big else '' }}"><b>{{ c.label }}</b><span>{{ c.text }}</span></li>
+    {% else %}<li class="muted">The first ball is yet to be bowled.</li>{% endfor %}
+  </ul>
+</section>
+{% endblock %}

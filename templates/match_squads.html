@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block content %}
+<form method="post">
+  <h2 class="mtitle">Choose the playing XI</h2>
+  <p class="muted">Pick 2 to 11 players for each side. A team is all out when only one batter is left.</p>
+  <div class="grid">
+    {% for key, team in [('team_a', m.team_a), ('team_b', m.team_b)] %}
+    <section class="card">
+      <h2>{{ team.name }}</h2>
+      {% for p in team.players %}
+      <label class="check"><input type="checkbox" name="{{ key }}" value="{{ p.id }}" {{ 'checked' if loop.index <= 11 }}>
+        <span>{{ p.name }}</span><small>{{ p.role }}</small></label>
+      {% endfor %}
+    </section>
+    {% endfor %}
+  </div>
+  <button>Start match</button>
+</form>
+{% endblock %}

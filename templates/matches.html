@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="row between" style="margin-bottom:16px">
+  <h2 class="mtitle">Matches</h2>
+  <a class="btn" href="{{ url_for('match_new') }}">+ New match</a>
+</div>
+<section class="card">
+  <table>
+    <tr><th>Match</th><th>Overs</th><th>Status</th><th>Result</th><th></th></tr>
+    {% for m in matches %}
+    <tr>
+      <td><b>{{ m.team_a.name }}</b> vs <b>{{ m.team_b.name }}</b></td>
+      <td>{{ m.overs }}</td>
+      <td><span class="badge {{ 'sold' if m.status == 'finished' else '' }}">{{ m.status }}</span></td>
+      <td>{{ m.result or '—' }}</td>
+      <td class="r">
+        <div class="row" style="justify-content:flex-end">
+          <a class="btn secondary" href="{{ url_for('match_view', mid=m.id) }}">{{ 'Open' if m.status != 'finished' else 'View' }}</a>
+          {% if m.status != 'setup' %}<a class="btn secondary" href="{{ url_for('match_scorecard', mid=m.id) }}">Scorecard</a>{% endif %}
+          <form method="post" action="{{ url_for('match_delete', mid=m.id) }}" onsubmit="return confirm('Delete this match and its scorecard?')"><button class="link danger">delete</button></form>
+        </div>
+      </td>
+    </tr>
+    {% else %}<tr><td class="muted" colspan="5">No matches yet. Start one with “New match”.</td></tr>{% endfor %}
+  </table>
+</section>
+{% endblock %}
