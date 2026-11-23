@@ -21,7 +21,7 @@
 
   <div class="row center-row">
     <label>Increment
-      <select id="inc"><option selected>2</option><option>5</option><option>10</option><option>25</option><option>50</option></select>
+      <select id="inc"><option selected>0.2</option><option>0.4</option><option>0.5</option><option>1</option><option>2</option><option>5</option><option>10</option><option>25</option><option>50</option></select>
     </label>
   </div>
 
@@ -49,10 +49,10 @@ function render() {
   $('leader').textContent = leader ? 'Leading: ' + teams.find(t => t.id === leader).name : 'No bids yet';
   $('f_team').value = leader || ''; $('f_price').value = bid;
   $('sellbtn').disabled = !leader;
-  const inc = parseInt($('inc').value);
+  const inc = parseFloat($('inc').value);
   $('teambtns').innerHTML = '';
   teams.forEach(t => {
-    const next = leader === null ? bid : bid + inc;
+   const next = leader === null ? bid : Math.round((bid + inc) * 100) / 100;
     const b = document.createElement('button');
     b.type = 'button';
     b.className = 'team' + (t.id === leader ? ' lead' : '');

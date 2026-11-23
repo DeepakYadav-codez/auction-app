@@ -4,7 +4,7 @@
   <h2>Add team</h2>
   <form method="post" class="row">
     <input name="name" placeholder="Team name" required>
-    <input name="budget" type="number" min="1" placeholder="Budget ({{ UNIT }})" required>
+    <input name="budget" type="number" step="any" min="0.01" placeholder="Budget ({{ UNIT }})" required>
     <button>Add team</button>
   </form>
 </section>

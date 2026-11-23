@@ -69,12 +69,12 @@
 // count-up numbers
 const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 document.querySelectorAll('[data-count]').forEach(el => {
-  const end = +el.dataset.count;
+   const end = +el.dataset.count, dec = (el.dataset.count.split('.')[1] || '').length;
   if (reduce || end === 0) { el.textContent = end; return; }
   const dur = 1300, t0 = performance.now();
   (function step(t) {
     const p = Math.min((t - t0) / dur, 1), e = 1 - Math.pow(1 - p, 4);
-    el.textContent = Math.round(end * e);
+        el.textContent = (end * e).toFixed(dec);
     if (p < 1) requestAnimationFrame(step);
   })(t0);
 });

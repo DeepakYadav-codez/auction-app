@@ -7,7 +7,7 @@
     <select name="role">
       <option>Batsman</option><option>Bowler</option><option>All-rounder</option><option>Wicketkeeper</option>
     </select>
-    <input name="base_price" type="number" min="1" placeholder="Base price ({{ UNIT }})" required>
+    <input name="base_price" type="number" step="any" min="0.01" placeholder="Base price ({{ UNIT }})" required>
     <button>Add player</button>
   </form>
 </section>

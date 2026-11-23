@@ -1,6 +1,7 @@
 import os
 from flask import Flask, render_template, request, redirect, url_for, flash
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy.types import TypeDecorator, Float
 
 app = Flask(__name__)
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///auction.db"
@@ -11,25 +12,52 @@ MAX_SQUAD = 15      # max players per team
 UNIT = "L"          # currency label (L = lakh)
 
 
+class Money(TypeDecorator):
+    """Stores decimals (0.2, 0.4...) and gives back 40 instead of 40.0."""
+    impl = Float
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        return None if value is None else round(float(value), 2)
+
+    def process_result_value(self, value, dialect):
+        if value is None:
+            return None
+        value = round(value, 2)
+        return int(value) if value == int(value) else value
+
+
+def num(text):
+    try:
+        return round(float(text), 2)
+    except (TypeError, ValueError):
+        return 0
+
+
+def fmt(n):
+    n = round(n, 2)
+    return int(n) if n == int(n) else n
+
+
 class Team(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(80), unique=True, nullable=False)
-    budget = db.Column(db.Integer, nullable=False)
-    remaining = db.Column(db.Integer, nullable=False)
+    budget = db.Column(Money, nullable=False)
+    remaining = db.Column(Money, nullable=False)
     players = db.relationship("Player", backref="team")
 
     @property
     def spent(self):
-        return self.budget - self.remaining
+        return round(self.budget - self.remaining, 2)
 
 
 class Player(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(80), nullable=False)
     role = db.Column(db.String(40), default="")
-    base_price = db.Column(db.Integer, nullable=False)
+    base_price = db.Column(Money, nullable=False)
     status = db.Column(db.String(20), default="available")  # available/sold/unsold
-    sold_price = db.Column(db.Integer)
+    sold_price = db.Column(Money)
     team_id = db.Column(db.Integer, db.ForeignKey("team.id"))
 
 
@@ -52,7 +80,7 @@ def dashboard():
     }
     sold = Player.query.filter_by(status="sold").order_by(Player.sold_price.desc()).all()
     top = sold[0] if sold else None
-    total_spent = sum(p.sold_price for p in sold)
+    total_spent = round(sum(p.sold_price for p in sold), 2)
     return render_template("dashboard.html", teams=teams, stats=stats, top=top,
                            sold=sold, total_spent=total_spent)
 
@@ -61,10 +89,7 @@ def dashboard():
 def teams():
     if request.method == "POST":
         name = request.form["name"].strip()
-        try:
-            budget = int(request.form["budget"])
-        except ValueError:
-            budget = 0
+        budget = num(request.form["budget"])
         if not name or budget <= 0:
             flash("Enter a team name and a valid budget.", "error")
         elif Team.query.filter_by(name=name).first():
@@ -93,10 +118,7 @@ def delete_team(tid):
 def players():
     if request.method == "POST":
         name = request.form["name"].strip()
-        try:
-            base = int(request.form["base_price"])
-        except ValueError:
-            base = 0
+        base = num(request.form["base_price"])
         if not name or base <= 0:
             flash("Enter a player name and a valid base price.", "error")
         else:
@@ -138,7 +160,7 @@ def auction():
 def sell(pid):
     p = db.session.get(Player, pid)
     t = db.session.get(Team, request.form.get("team_id", type=int) or 0)
-    price = request.form.get("price", type=int) or 0
+    price = round(request.form.get("price", type=float) or 0, 2)
     if not p or not t:
         flash("Pick a team to sell to.", "error")
     elif p.status == "sold":
@@ -151,9 +173,9 @@ def sell(pid):
         flash(f"{t.name} already has a full squad ({MAX_SQUAD}).", "error")
     else:
         p.status, p.sold_price, p.team_id = "sold", price, t.id
-        t.remaining -= price
+        t.remaining = round(t.remaining - price, 2)
         db.session.commit()
-        flash(f"SOLD! {p.name} to {t.name} for {price}{UNIT}", "ok")
+        flash(f"SOLD! {p.name} to {t.name} for {fmt(price)}{UNIT}", "ok")
     return redirect(url_for("auction"))
 
 
@@ -171,7 +193,7 @@ def unsold(pid):
 def undo(pid):
     p = db.session.get(Player, pid)
     if p and p.status == "sold":
-        p.team.remaining += p.sold_price
+        p.team.remaining = round(p.team.remaining + p.sold_price, 2)
         p.status, p.sold_price, p.team_id = "available", None, None
         db.session.commit()
         flash(f"Sale of {p.name} undone.", "ok")
